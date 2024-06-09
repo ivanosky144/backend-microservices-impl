@@ -1,0 +1,9 @@
+go 1.22.2
+
+use (
+    ./services/account-service
+    ./services/community-service
+    ./services/content-service
+    ./services/messaging-service
+)
+
