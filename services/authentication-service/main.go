@@ -37,6 +37,6 @@ func main() {
 
 	http.Handle("/", router)
 
-	log.Println("Server is listening on port 3200")
-	log.Fatal(http.ListenAndServe("localhost:3200", nil))
+	log.Println("Authentication service is listening on port 3300")
+	log.Fatal(http.ListenAndServe("localhost:3300", nil))
 }

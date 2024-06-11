@@ -38,6 +38,6 @@ func main() {
 
 	http.Handle("/", router)
 
-	log.Println("Server is listening on port 3200")
-	log.Fatal(http.ListenAndServe("localhost:3200", nil))
+	log.Println("Content service is listening on port 3400")
+	log.Fatal(http.ListenAndServe("localhost:3400", nil))
 }
