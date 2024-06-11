@@ -6,12 +6,11 @@ import (
 
 	"github.com/temuka-messaging-service/config"
 	"github.com/temuka-messaging-service/models"
-	"gorm.io/gorm"
 )
 
-var db *gorm.DB = config.GetDBInstance()
-
 func CreateConversation(w http.ResponseWriter, r *http.Request) {
+	db := config.GetDBInstance()
+
 	var requestBody struct {
 		Title     string `json:"title"`
 		CreatorID int    `json:"creator_id"`
@@ -24,8 +23,8 @@ func CreateConversation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newConversation := models.Conversation{
-		Title:     requestBody.Title,
-		CreatorID: requestBody.CreatorID,
+		Title:  requestBody.Title,
+		UserID: requestBody.CreatorID,
 	}
 
 	db.Create(&newConversation)
@@ -37,5 +36,5 @@ func CreateConversation(w http.ResponseWriter, r *http.Request) {
 		Message: "Conversation has been created",
 		Data:    newConversation,
 	}
-	json.NewEncoder(w).Encode(response)
+	respondJSON(w, http.StatusOK, response)
 }
