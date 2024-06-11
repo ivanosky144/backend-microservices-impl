@@ -6,10 +6,13 @@ import (
 	"strconv"
 
 	"github.com/gorilla/mux"
+	"github.com/temuka-authentication-service/config"
 	"github.com/temuka-authentication-service/models"
 )
 
 func SearchUsers(w http.ResponseWriter, r *http.Request) {
+	db := config.GetDBInstance()
+
 	var users []models.User
 
 	if err := db.Find(&users).Error; err != nil {
@@ -29,10 +32,12 @@ func SearchUsers(w http.ResponseWriter, r *http.Request) {
 		Message: "User has been created",
 		Data:    users,
 	}
-	json.NewEncoder(w).Encode(response)
+	respondJSON(w, http.StatusOK, response)
 }
 
 func GetUserDetail(w http.ResponseWriter, r *http.Request) {
+	db := config.GetDBInstance()
+
 	vars := mux.Vars(r)
 	userIDstr := vars["id"]
 
@@ -58,10 +63,12 @@ func GetUserDetail(w http.ResponseWriter, r *http.Request) {
 		Data:    user,
 	}
 
-	json.NewEncoder(w).Encode(response)
+	respondJSON(w, http.StatusOK, response)
 }
 
 func CreateUser(w http.ResponseWriter, r *http.Request) {
+	db := config.GetDBInstance()
+
 	var requestBody struct {
 		Username string `json:"username"`
 		Email    string `json:"email"`
@@ -88,10 +95,12 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		Message: "User has been created",
 		Data:    newUser,
 	}
-	json.NewEncoder(w).Encode(response)
+	respondJSON(w, http.StatusOK, response)
 }
 
 func UpdateUser(w http.ResponseWriter, r *http.Request) {
+	db := config.GetDBInstance()
+
 	vars := mux.Vars(r)
 	userIDstr := vars["user_id"]
 
@@ -123,5 +132,5 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		Data:    user,
 	}
 
-	json.NewEncoder(w).Encode(response)
+	respondJSON(w, http.StatusOK, response)
 }

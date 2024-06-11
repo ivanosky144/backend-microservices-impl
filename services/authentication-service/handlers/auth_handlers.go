@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -11,17 +12,16 @@ import (
 	"github.com/temuka-authentication-service/config"
 	"github.com/temuka-authentication-service/models"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
-var db *gorm.DB = config.GetDBInstance()
-
 func Register(w http.ResponseWriter, r *http.Request) {
+	db := config.GetDBInstance()
 	var requestBody struct {
 		Username string `json:"username"`
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
+	log.Printf("Database : %v", db)
 
 	err := json.NewDecoder(r.Body).Decode(&requestBody)
 	if err != nil {
@@ -34,6 +34,11 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error hashing password", http.StatusInternalServerError)
 		return
 	}
+	if db == nil {
+		log.Println("Database connection is error")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 
 	newUser := models.User{
 		Username:       requestBody.Username,
@@ -44,6 +49,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := db.Create(&newUser).Error; err != nil {
+		log.Println("Error creating user:", err)
 		http.Error(w, "Error creating user", http.StatusInternalServerError)
 		return
 	}
@@ -55,10 +61,13 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		Message: "New user has been registered",
 		Data:    newUser,
 	}
-	json.NewEncoder(w).Encode(response)
+
+	respondJSON(w, http.StatusOK, response)
 }
 
 func Login(w http.ResponseWriter, r *http.Request) {
+	db := config.GetDBInstance()
+
 	var requestBody struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -100,10 +109,12 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		Message: "User has login successfully",
 		Token:   tokenString,
 	}
-	json.NewEncoder(w).Encode(response)
+	respondJSON(w, http.StatusOK, response)
 }
 
 func ResetPassword(w http.ResponseWriter, r *http.Request) {
+	db := config.GetDBInstance()
+
 	vars := mux.Vars(r)
 	userIDstr := vars["id"]
 
@@ -169,7 +180,7 @@ func ResetPassword(w http.ResponseWriter, r *http.Request) {
 		}{
 			Message: "Password was reset successfully",
 		}
-		json.NewEncoder(w).Encode(response)
+		respondJSON(w, http.StatusOK, response)
 	}
 
 }

@@ -5,7 +5,11 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/temuka-authentication-service/config"
+	"github.com/temuka-authentication-service/models"
 	"github.com/temuka-authentication-service/routes"
+
+	"gorm.io/gorm"
 )
 
 func EnableCors(w http.ResponseWriter, r *http.Request) {
@@ -15,12 +19,24 @@ func EnableCors(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	config.OpenConnection()
+	var db *gorm.DB = config.GetDBInstance()
+
+	if config.Database == nil {
+		log.Fatal("Database connection is nil")
+	}
+	if err := config.Database.AutoMigrate(&models.User{}); err != nil {
+		log.Fatalf("Failed to auto-migrate models: %v", err)
+	}
+	log.Printf("Database : %v", db)
+	log.Println("Auto-migration completed.")
 	router := mux.NewRouter()
 
-	router.PathPrefix("/auth").Handler(routes.AuthRoutes())
-	router.PathPrefix("/user").Handler(routes.UserRoutes())
+	router.PathPrefix("/api/auth").Handler(http.StripPrefix("/api/auth", routes.AuthRoutes()))
+	router.PathPrefix("/api/user").Handler(http.StripPrefix("/api/user", routes.UserRoutes()))
 
 	http.Handle("/", router)
 
-	log.Fatal(http.ListenAndServe(":8001", nil))
+	log.Println("Server is listening on port 3200")
+	log.Fatal(http.ListenAndServe("localhost:3200", nil))
 }

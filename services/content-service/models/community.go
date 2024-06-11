@@ -13,7 +13,7 @@ type Community struct {
 	Description  string    `gorm:"column:desc"`
 	Rules        []string  `gorm:"column:rules"`
 	Members      []int     `gorm:"column:members"`
-	MembersCount int       `gorm:column:members_count`
+	MembersCount int       `gorm:"column:members_count"`
 	Moderators   []int     `gorm:"column:moderators"`
 	LogoPicture  string    `gorm:"column:logo_picture"`
 	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime"`

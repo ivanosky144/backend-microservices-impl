@@ -14,11 +14,11 @@ type User struct {
 	Password       string    `gorm:"column:password"`
 	ProfilePicture string    `gorm:"column:profile_picture"`
 	CoverPicture   string    `gorm:"column:cover_picture"`
-	Followers      []string  `gorm:"column:followers"`
-	Followings     []string  `gorm:"column:followings"`
+	Followers      []*User   `gorm:"many2many:user_followers;"`
+	Followings     []*User   `gorm:"many2many:user_followings;"`
 	SocialPoint    int       `gorm:"column:social_point"`
-	Desc           string    `gorm:"column:desc"`
-	Country        string    `gorm:"column:city"`
+	Desc           string    `gorm:"column:description"`
+	Country        string    `gorm:"column:country"`
 	CreatedAt      time.Time `gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt      time.Time `gorm:"column:updated_at;autoCreateTime;autoUpdateTime"`
 }
