@@ -8,12 +8,13 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/temuka-content-service/config"
 	"github.com/temuka-content-service/models"
+
 	"gorm.io/gorm"
 )
 
-var db *gorm.DB = config.GetDBInstance()
-
 func CreatePost(w http.ResponseWriter, r *http.Request) {
+	db := config.GetDBInstance()
+
 	var requestBody struct {
 		Title       string `json:"title"`
 		Description string `json:"desc"`
@@ -40,18 +41,20 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 		Message: "Post has been created",
 		Data:    newPost,
 	}
-	json.NewEncoder(w).Encode(response)
+	respondJSON(w, http.StatusOK, response)
 }
 
 func GetTimelinePosts(w http.ResponseWriter, r *http.Request) {
-	// vars := mux.Vars(r)
-	// userIDstr := vars["user_id"]
+	db := config.GetDBInstance()
 
-	// userID, err := strconv.Atoi(userIDstr)
-	// if err != nil {
-	// 	http.Error(w, "Invalid user id", http.StatusBadRequest)
-	// 	return
-	// }
+	vars := mux.Vars(r)
+	userIDstr := vars["user_id"]
+
+	userID, err := strconv.Atoi(userIDstr)
+	if err != nil {
+		http.Error(w, "Invalid user id", http.StatusBadRequest)
+		return
+	}
 
 	// var currentUser models.User
 	// if err := db.First(&currentUser, "id = ?", userID).Error; err != nil {
@@ -59,36 +62,38 @@ func GetTimelinePosts(w http.ResponseWriter, r *http.Request) {
 	// 	return
 	// }
 
-	// var userPosts []models.Post
-	// if err := db.Where("user_id = ?", currentUser.ID).Find(&userPosts).Error; err != nil {
-	// 	http.Error(w, "Error retrieving user posts", http.StatusInternalServerError)
-	// 	return
-	// }
+	var userPosts []models.Post
+	if err := db.Where("user_id = ?", userID).Find(&userPosts).Error; err != nil {
+		http.Error(w, "Error retrieving user posts", http.StatusInternalServerError)
+		return
+	}
 
-	// var friendPosts []models.Post
-	// for _, friendID := range currentUser.Followings {
-	// 	var posts []models.Post
-	// 	if err := db.Where("user_id = ?", friendID).Find(&posts).Error; err != nil {
-	// 		http.Error(w, "Error retrieving friend posts", http.StatusInternalServerError)
-	// 		return
-	// 	}
-	// 	friendPosts = append(friendPosts, posts...)
-	// }
+	var friendPosts []models.Post
+	for _, friendID := range currentUser.Followings {
+		var posts []models.Post
+		if err := db.Where("user_id = ?", friendID).Find(&posts).Error; err != nil {
+			http.Error(w, "Error retrieving friend posts", http.StatusInternalServerError)
+			return
+		}
+		friendPosts = append(friendPosts, posts...)
+	}
 
-	// timelinePosts := append(userPosts, friendPosts...)
+	timelinePosts := append(userPosts, friendPosts...)
 
-	// response := struct {
-	// 	Message string        `json:"message"`
-	// 	Data    []models.Post `json:"data"`
-	// }{
-	// 	Message: "Timeline posts has been retrieved",
-	// 	Data:    timelinePosts,
-	// }
+	response := struct {
+		Message string        `json:"message"`
+		Data    []models.Post `json:"data"`
+	}{
+		Message: "Timeline posts has been retrieved",
+		Data:    timelinePosts,
+	}
 
-	// json.NewEncoder(w).Encode(response)
+	respondJSON(w, http.StatusOK, response)
 }
 
 func DeletePost(w http.ResponseWriter, r *http.Request) {
+	db := config.GetDBInstance()
+
 	vars := mux.Vars(r)
 	postIDstr := vars["id"]
 
@@ -113,10 +118,12 @@ func DeletePost(w http.ResponseWriter, r *http.Request) {
 		Message: "Post has been deleted",
 	}
 
-	json.NewEncoder(w).Encode(response)
+	respondJSON(w, http.StatusOK, response)
 }
 
 func LikePost(w http.ResponseWriter, r *http.Request) {
+	db := config.GetDBInstance()
+
 	vars := mux.Vars(r)
 	postIDstr := vars["id"]
 
@@ -147,15 +154,21 @@ func LikePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	alreadyLiked := false
-	for _, userID := range post.Likes {
-		if userID == requestBody.UserID {
+	for _, user := range post.Likes {
+		if uint(user.ID) == uint(requestBody.UserID) {
 			alreadyLiked = true
 			break
 		}
 	}
 
 	if !alreadyLiked {
-		post.Likes = append(post.Likes, requestBody.UserID)
+		var liker models.User
+		if err := db.First(&liker, requestBody.UserID).Error; err != nil {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+
+		post.Likes = append(post.Likes, &liker)
 		if err := db.Save(&post).Error; err != nil {
 			http.Error(w, "Error liking post", http.StatusInternalServerError)
 			return
@@ -167,6 +180,6 @@ func LikePost(w http.ResponseWriter, r *http.Request) {
 			Message: "You have liked this post",
 		}
 
-		json.NewEncoder(w).Encode(response)
+		respondJSON(w, http.StatusOK, response)
 	}
 }

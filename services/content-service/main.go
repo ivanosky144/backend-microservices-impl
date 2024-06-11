@@ -5,7 +5,11 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/temuka-content-service/config"
+	"github.com/temuka-content-service/models"
 	"github.com/temuka-content-service/routes"
+
+	"gorm.io/gorm"
 )
 
 func EnableCors(w http.ResponseWriter, r *http.Request) {
@@ -15,13 +19,25 @@ func EnableCors(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	config.OpenConnection()
+	var db *gorm.DB = config.GetDBInstance()
+
+	if config.Database == nil {
+		log.Fatal("Database connection is nil")
+	}
+	if err := config.Database.AutoMigrate(&models.Community{}, &models.Post{}, &models.Comment{}, &models.CommunityMember{}, &models.CommunityPost{}, &models.Moderator{}); err != nil {
+		log.Fatalf("Failed to auto-migrate models: %v", err)
+	}
+	log.Printf("Database : %v", db)
+	log.Println("Auto-migration completed.")
 	router := mux.NewRouter()
 
-	router.PathPrefix("/post").Handler(routes.PostRoutes())
-	router.PathPrefix("/community").Handler(routes.CommunityRoutes())
-	router.PathPrefix("/comment").Handler(routes.CommentRoutes())
+	router.PathPrefix("/api/post").Handler(http.StripPrefix("/api/post", routes.PostRoutes()))
+	router.PathPrefix("/api/community").Handler(http.StripPrefix("/api/community", routes.CommunityRoutes()))
+	router.PathPrefix("/api/comment").Handler(http.StripPrefix("/api/comment", routes.CommentRoutes()))
 
 	http.Handle("/", router)
 
-	log.Fatal(http.ListenAndServe(":8002", nil))
+	log.Println("Server is listening on port 3200")
+	log.Fatal(http.ListenAndServe("localhost:3200", nil))
 }
