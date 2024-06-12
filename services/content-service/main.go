@@ -2,42 +2,42 @@ package main
 
 import (
 	"log"
-	"net/http"
+	"net"
 
-	"github.com/gorilla/mux"
 	"github.com/temuka-content-service/config"
+	"github.com/temuka-content-service/handlers"
 	"github.com/temuka-content-service/models"
-	"github.com/temuka-content-service/routes"
-
-	"gorm.io/gorm"
+	"github.com/temuka-content-service/pb"
+	"google.golang.org/grpc"
 )
-
-func EnableCors(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-}
 
 func main() {
 	config.OpenConnection()
-	var db *gorm.DB = config.GetDBInstance()
+	var db = config.GetDBInstance()
 
-	if config.Database == nil {
+	if db == nil {
 		log.Fatal("Database connection is nil")
 	}
-	if err := config.Database.AutoMigrate(&models.Community{}, &models.Post{}, &models.Comment{}, &models.CommunityMember{}, &models.CommunityPost{}, &models.Moderator{}); err != nil {
+
+	if err := db.AutoMigrate(&models.Community{}, &models.CommunityMember{}, &models.Comment{}, &models.Post{}, &models.UserLike{}, &models.UserVote{}, &models.Moderator{}); err != nil {
 		log.Fatalf("Failed to auto-migrate models: %v", err)
 	}
-	log.Printf("Database : %v", db)
+
 	log.Println("Auto-migration completed.")
-	router := mux.NewRouter()
 
-	router.PathPrefix("/api/post").Handler(http.StripPrefix("/api/post", routes.PostRoutes()))
-	router.PathPrefix("/api/community").Handler(http.StripPrefix("/api/community", routes.CommunityRoutes()))
-	router.PathPrefix("/api/comment").Handler(http.StripPrefix("/api/comment", routes.CommentRoutes()))
+	// Create gRPC server
+	grpcServer := grpc.NewServer()
 
-	http.Handle("/", router)
+	// Register gRPC service implementation
+	pb.RegisterContentServiceServer(grpcServer, handlers.NewServer())
 
-	log.Println("Content service is listening on port 3400")
-	log.Fatal(http.ListenAndServe("localhost:3400", nil))
+	// Start gRPC server
+	lis, err := net.Listen("tcp", ":50052")
+	if err != nil {
+		log.Fatalf("Failed to listen: %v", err)
+	}
+	log.Println("gRPC server is listening on port 50052")
+	if err := grpcServer.Serve(lis); err != nil {
+		log.Fatalf("Failed to serve: %v", err)
+	}
 }

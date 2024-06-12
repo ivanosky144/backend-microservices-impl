@@ -1,111 +1,66 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
-	"strconv"
+	"context"
+	"errors"
+	"log"
 
-	"github.com/gorilla/mux"
 	"github.com/temuka-content-service/config"
 	"github.com/temuka-content-service/models"
-
+	pb "github.com/temuka-content-service/pb"
 	"gorm.io/gorm"
 )
 
-func CreateCommunity(w http.ResponseWriter, r *http.Request) {
+func (s *server) CreateCommunity(ctx context.Context, req *pb.CreateCommunityRequest) (*pb.CreateCommunityResponse, error) {
 	db := config.GetDBInstance()
-
-	var requestBody struct {
-		Name        string `json:"name"`
-		Description string `json:"desc"`
-		LogoPicture string `json:"logopicture"`
-	}
-
-	err := json.NewDecoder(r.Body).Decode(&requestBody)
-	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
 
 	newCommunity := models.Community{
-		Name:        requestBody.Name,
-		Description: requestBody.Description,
-		LogoPicture: requestBody.LogoPicture,
+		Name:        req.GetName(),
+		Description: req.GetDesc(),
+		LogoPicture: req.GetLogopicture(),
 	}
 
-	db.Create(&newCommunity)
+	if err := db.Create(&newCommunity).Error; err != nil {
+		log.Printf("Error creating community: %v", err)
+		return nil, err
+	}
 
-	response := struct {
-		Message string           `json:"message"`
-		Data    models.Community `json:"data"`
-	}{
+	return &pb.CreateCommunityResponse{
 		Message: "Community has been created",
-		Data:    newCommunity,
-	}
-	respondJSON(w, http.StatusOK, response)
+		Data: &pb.Community{
+			Id:           int32(newCommunity.ID),
+			Name:         newCommunity.Name,
+			Desc:         newCommunity.Description,
+			Logopicture:  newCommunity.LogoPicture,
+			MembersCount: int32(newCommunity.MembersCount),
+		},
+	}, nil
 }
 
-func JoinCommunity(w http.ResponseWriter, r *http.Request) {
+func (s *server) JoinCommunity(ctx context.Context, req *pb.JoinCommunityRequest) (*pb.JoinCommunityResponse, error) {
 	db := config.GetDBInstance()
 
-	vars := mux.Vars(r)
-	communityIDstr := vars["id"]
-
-	communityID, err := strconv.Atoi(communityIDstr)
-	if err != nil {
-		http.Error(w, "Invalid community id", http.StatusBadRequest)
-		return
-	}
-
-	var requestBody struct {
-		UserID int `json:"user_id"`
-	}
-
-	err = json.NewDecoder(r.Body).Decode(&requestBody)
-	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	var community models.Community
-	if err := db.First(&community, communityID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			http.Error(w, "Community not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Error retrieving community", http.StatusInternalServerError)
-		}
-		return
-	}
-
 	var existingMember models.CommunityMember
-	if err := db.Where("community_id = ? AND user_id = ?", communityID, requestBody.UserID).First(&existingMember).Error; err == nil {
-		http.Error(w, "User already a member of the community", http.StatusBadRequest)
-		return
+	if err := db.Where("community_id = ? AND user_id = ?", req.GetCommunityId(), req.GetUserId()).First(&existingMember).Error; err == nil {
+		return nil, errors.New("User already a member of the community")
 	} else if err != gorm.ErrRecordNotFound {
-		http.Error(w, "Error checking community membership", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
 	newMember := models.CommunityMember{
-		UserID:      requestBody.UserID,
-		CommunityID: communityID,
+		UserID:      int(req.GetUserId()),
+		CommunityID: int(req.GetCommunityId()),
 	}
 
 	if err := db.Create(&newMember).Error; err != nil {
-		http.Error(w, "Error adding community member", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
-	community.MembersCount += 1
-	if err := db.Save(&community).Error; err != nil {
-		http.Error(w, "Error updating community", http.StatusInternalServerError)
-		return
+	if err := db.Model(&models.Community{}).Where("id = ?", req.GetCommunityId()).Update("members_count", gorm.Expr("members_count + ?", 1)).Error; err != nil {
+		return nil, err
 	}
 
-	response := struct {
-		Message string `json:"message"`
-	}{
+	return &pb.JoinCommunityResponse{
 		Message: "Successfully joined the community",
-	}
-	respondJSON(w, http.StatusOK, response)
+	}, nil
 }

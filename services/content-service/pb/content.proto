@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+package content;
+
+option go_package = "github.com/temuka-content-service/pb";
+
+service ContentService {
+    rpc AddComment (AddCommentRequest) returns (AddCommentResponse);
+    rpc CreateCommunity (CreateCommunityRequest) returns (CreateCommunityResponse);
+    rpc JoinCommunity (JoinCommunityRequest) returns (JoinCommunityResponse);
+    rpc CreatePost (CreatePostRequest) returns (CreatePostResponse);
+    rpc GetTimelinePosts (GetTimelinePostsRequest) returns (GetTimelinePostsResponse);
+    rpc DeletePost (DeletePostRequest) returns (DeletePostResponse);
+    rpc LikePost (LikePostRequest) returns (LikePostResponse);
+}
+
+message AddCommentRequest {
+    int32 post_id = 1;
+    int32 user_id = 2;
+    string content = 3;
+}
+
+message AddCommentResponse {
+    string message = 1;
+    Comment data = 2;
+}
+
+message CreateCommunityRequest {
+    string name = 1;
+    string desc = 2;
+    string logopicture = 3;
+}
+
+message CreateCommunityResponse {
+    string message = 1;
+    Community data = 2;
+}
+
+message JoinCommunityRequest {
+    int32 community_id = 1;
+    int32 user_id = 2;
+}
+
+message JoinCommunityResponse {
+    string message = 1;
+}
+
+message Comment {
+    int32 id = 1;
+    int32 post_id = 2;
+    int32 user_id = 3;
+    string content = 4;
+}
+
+message Community {
+    int32 id = 1;
+    string name = 2;
+    string desc = 3;
+    string logopicture = 4;
+    int32 members_count = 5;
+}
+
+message CreatePostRequest {
+    string title = 1;
+    string desc = 2;
+    int32 user_id = 3;
+}
+
+message CreatePostResponse {
+    string message = 1;
+    Post data = 2;
+}
+
+message GetTimelinePostsRequest {
+    int32 user_id = 1;
+}
+
+message GetTimelinePostsResponse {
+    string message = 1;
+    repeated Post data = 2;
+}
+
+message DeletePostRequest {
+    int32 id = 1;
+}
+
+message DeletePostResponse {
+    string message = 1;
+}
+
+message LikePostRequest {
+    int32 id = 1;
+    int32 user_id = 2;
+}
+
+message LikePostResponse {
+    string message = 1;
+}
+
+message Post {
+    int32 id = 1;
+    string title = 2;
+    string desc = 3;
+    int32 user_id = 4;
+}

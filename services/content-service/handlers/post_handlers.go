@@ -1,161 +1,82 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
-	"strconv"
+	"context"
 
-	"github.com/gorilla/mux"
 	"github.com/temuka-content-service/config"
 	"github.com/temuka-content-service/models"
-
-	"gorm.io/gorm"
+	pb "github.com/temuka-content-service/pb"
 )
 
-func CreatePost(w http.ResponseWriter, r *http.Request) {
+func (s *server) CreatePost(ctx context.Context, req *pb.CreatePostRequest) (*pb.CreatePostResponse, error) {
 	db := config.GetDBInstance()
 
-	var requestBody struct {
-		Title       string `json:"title"`
-		Description string `json:"desc"`
-		UserID      int    `json:"user_id"`
-	}
-
-	err := json.NewDecoder(r.Body).Decode(&requestBody)
-	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
 	newPost := models.Post{
-		Title:       requestBody.Title,
-		Description: requestBody.Description,
-		UserID:      requestBody.UserID,
+		Title:       req.GetTitle(),
+		Description: req.GetDesc(),
+		UserID:      int(req.GetUserId()),
 	}
 	db.Create(&newPost)
 
-	response := struct {
-		Message string      `json:"message"`
-		Data    models.Post `json:"data"`
-	}{
+	return &pb.CreatePostResponse{
 		Message: "Post has been created",
-		Data:    newPost,
-	}
-	respondJSON(w, http.StatusOK, response)
+		Data: &pb.Post{
+			Id:     int32(newPost.ID),
+			Title:  newPost.Title,
+			Desc:   newPost.Description,
+			UserId: int32(newPost.UserID),
+		},
+	}, nil
 }
 
-func GetTimelinePosts(w http.ResponseWriter, r *http.Request) {
+func (s *server) GetTimelinePosts(ctx context.Context, req *pb.GetTimelinePostsRequest) (*pb.GetTimelinePostsResponse, error) {
 	db := config.GetDBInstance()
 
-	vars := mux.Vars(r)
-	userIDstr := vars["user_id"]
-
-	userID, err := strconv.Atoi(userIDstr)
-	if err != nil {
-		http.Error(w, "Invalid user id", http.StatusBadRequest)
-		return
+	var timelinePosts []models.Post
+	if err := db.Where("user_id = ?", req.GetUserId()).Find(&timelinePosts).Error; err != nil {
+		return nil, err
 	}
 
-	var currentUser models.User
-	if err := db.First(&currentUser, "id = ?", userID).Error; err != nil {
-		http.Error(w, "Cannot retrieve the data because the user was not found", http.StatusNotFound)
-		return
+	var pbPosts []*pb.Post
+	for _, post := range timelinePosts {
+		pbPosts = append(pbPosts, &pb.Post{
+			Id:     int32(post.ID),
+			Title:  post.Title,
+			Desc:   post.Description,
+			UserId: int32(post.UserID),
+		})
 	}
 
-	var userPosts []models.Post
-	if err := db.Where("user_id = ?", userID).Find(&userPosts).Error; err != nil {
-		http.Error(w, "Error retrieving user posts", http.StatusInternalServerError)
-		return
-	}
-
-	var friendPosts []models.Post
-	for _, friendID := range currentUser.Followings {
-		var posts []models.Post
-		if err := db.Where("user_id = ?", friendID).Find(&posts).Error; err != nil {
-			http.Error(w, "Error retrieving friend posts", http.StatusInternalServerError)
-			return
-		}
-		friendPosts = append(friendPosts, posts...)
-	}
-
-	timelinePosts := append(userPosts, friendPosts...)
-
-	response := struct {
-		Message string        `json:"message"`
-		Data    []models.Post `json:"data"`
-	}{
+	return &pb.GetTimelinePostsResponse{
 		Message: "Timeline posts has been retrieved",
-		Data:    timelinePosts,
-	}
-
-	respondJSON(w, http.StatusOK, response)
+		Data:    pbPosts,
+	}, nil
 }
 
-func DeletePost(w http.ResponseWriter, r *http.Request) {
+// DeletePost implements the DeletePost gRPC method.
+func (s *server) DeletePost(ctx context.Context, req *pb.DeletePostRequest) (*pb.DeletePostResponse, error) {
 	db := config.GetDBInstance()
 
-	vars := mux.Vars(r)
-	postIDstr := vars["id"]
-
-	postID, err := strconv.Atoi(postIDstr)
-	if err != nil {
-		http.Error(w, "Invalid post id", http.StatusBadRequest)
-		return
+	if err := db.Delete(&models.Post{}, req.GetId()).Error; err != nil {
+		return nil, err
 	}
 
-	if err := db.Delete(&models.Post{}, postID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			http.Error(w, "Post not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Error deleting post", http.StatusInternalServerError)
-		}
-		return
-	}
-
-	response := struct {
-		Message string `json:"message"`
-	}{
+	return &pb.DeletePostResponse{
 		Message: "Post has been deleted",
-	}
-
-	respondJSON(w, http.StatusOK, response)
+	}, nil
 }
 
-func LikePost(w http.ResponseWriter, r *http.Request) {
+func (s *server) LikePost(ctx context.Context, req *pb.LikePostRequest) (*pb.LikePostResponse, error) {
 	db := config.GetDBInstance()
-
-	vars := mux.Vars(r)
-	postIDstr := vars["id"]
-
-	postID, err := strconv.Atoi(postIDstr)
-	if err != nil {
-		http.Error(w, "Invalid post id", http.StatusBadRequest)
-		return
-	}
-
-	var requestBody struct {
-		UserID int `json:"user_id"`
-	}
-
-	err = json.NewDecoder(r.Body).Decode(&requestBody)
-	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
 
 	var post models.Post
-	if err := db.First(&post, postID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			http.Error(w, "Post not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Error retrieving post", http.StatusBadRequest)
-		}
-		return
+	if err := db.First(&post, req.GetId()).Error; err != nil {
+		return nil, err
 	}
 
 	alreadyLiked := false
 	for _, user := range post.Likes {
-		if uint(user.ID) == uint(requestBody.UserID) {
+		if uint(user.ID) == uint(req.GetUserId()) {
 			alreadyLiked = true
 			break
 		}
@@ -163,23 +84,24 @@ func LikePost(w http.ResponseWriter, r *http.Request) {
 
 	if !alreadyLiked {
 		var liker models.User
-		if err := db.First(&liker, requestBody.UserID).Error; err != nil {
-			http.Error(w, "User not found", http.StatusNotFound)
-			return
+		if err := db.First(&liker, req.GetUserId()).Error; err != nil {
+			return nil, err
 		}
 
+		// Append the liker to the post's likes slice
 		post.Likes = append(post.Likes, &liker)
+
+		// Save the updated post to the database
 		if err := db.Save(&post).Error; err != nil {
-			http.Error(w, "Error liking post", http.StatusInternalServerError)
-			return
+			return nil, err
 		}
 
-		response := struct {
-			Message string `json:"message"`
-		}{
+		return &pb.LikePostResponse{
 			Message: "You have liked this post",
-		}
-
-		respondJSON(w, http.StatusOK, response)
+		}, nil
 	}
+
+	return &pb.LikePostResponse{
+		Message: "You have already liked this post",
+	}, nil
 }

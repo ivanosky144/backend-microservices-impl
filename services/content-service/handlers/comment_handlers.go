@@ -1,43 +1,35 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
+	"context"
 
 	"github.com/temuka-content-service/config"
 	"github.com/temuka-content-service/models"
+	"github.com/temuka-content-service/pb"
 )
 
-func AddComment(w http.ResponseWriter, r *http.Request) {
+func (s *server) AddComment(ctx context.Context, req *pb.AddCommentRequest) (*pb.AddCommentResponse, error) {
 	db := config.GetDBInstance()
 
-	var requestBody struct {
-		PostID  int    `json:"post_id"`
-		UserID  int    `json:"user_id"`
-		Content string `json:"content"`
-	}
-
-	err := json.NewDecoder(r.Body).Decode(&requestBody)
-	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
 	newComment := models.Comment{
-		UserID:  requestBody.UserID,
-		PostID:  requestBody.PostID,
-		Content: requestBody.Content,
+		UserID:  int(req.UserId),
+		PostID:  int(req.PostId),
+		Content: req.Content,
 	}
 
-	db.Create(&newComment)
+	if err := db.Create(&newComment).Error; err != nil {
+		return nil, err
+	}
 
-	response := struct {
-		Message string         `json:"message"`
-		Data    models.Comment `json:"data"`
-	}{
+	response := &pb.AddCommentResponse{
 		Message: "Comment has been added",
-		Data:    newComment,
+		Data: &pb.Comment{
+			Id:      int32(newComment.ID),
+			PostId:  int32(newComment.PostID),
+			UserId:  int32(newComment.UserID),
+			Content: newComment.Content,
+		},
 	}
 
-	respondJSON(w, http.StatusOK, response)
+	return response, nil
 }
