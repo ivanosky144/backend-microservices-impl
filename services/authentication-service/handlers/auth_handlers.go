@@ -1,93 +1,52 @@
 package handlers
 
 import (
-	"encoding/json"
-	"log"
-	"net/http"
+	"context"
+	"errors"
 	"os"
-	"strconv"
 
 	"github.com/dgrijalva/jwt-go"
-	"github.com/gorilla/mux"
 	"github.com/temuka-authentication-service/config"
 	"github.com/temuka-authentication-service/models"
+	"github.com/temuka-authentication-service/pb"
 	"golang.org/x/crypto/bcrypt"
 )
 
-func Register(w http.ResponseWriter, r *http.Request) {
+func (s *server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
 	db := config.GetDBInstance()
-	var requestBody struct {
-		Username string `json:"username"`
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
-	log.Printf("Database : %v", db)
 
-	err := json.NewDecoder(r.Body).Decode(&requestBody)
+	hashedPwd, err := bcrypt.GenerateFromPassword([]byte(req.Password), 10)
 	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	hashedPwd, err := bcrypt.GenerateFromPassword([]byte(requestBody.Password), 10)
-	if err != nil {
-		http.Error(w, "Error hashing password", http.StatusInternalServerError)
-		return
-	}
-	if db == nil {
-		log.Println("Database connection is error")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
 	newUser := models.User{
-		Username:       requestBody.Username,
-		Email:          requestBody.Email,
+		Username:       req.Username,
+		Email:          req.Email,
 		Password:       string(hashedPwd),
 		ProfilePicture: "",
 		CoverPicture:   "",
 	}
 
 	if err := db.Create(&newUser).Error; err != nil {
-		log.Println("Error creating user:", err)
-		http.Error(w, "Error creating user", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
-	response := struct {
-		Message string      `json:"message"`
-		Data    models.User `json:"data"`
-	}{
+	return &pb.RegisterResponse{
 		Message: "New user has been registered",
-		Data:    newUser,
-	}
-
-	respondJSON(w, http.StatusOK, response)
+	}, nil
 }
 
-func Login(w http.ResponseWriter, r *http.Request) {
+func (s *server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginResponse, error) {
 	db := config.GetDBInstance()
 
-	var requestBody struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
-
-	err := json.NewDecoder(r.Body).Decode(&requestBody)
-	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
 	var user models.User
-	if err := db.Where("email = ?", requestBody.Email).First(&user).Error; err != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
-		return
+	if err := db.Where("email = ?", req.Email).First(&user).Error; err != nil {
+		return nil, err
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(requestBody.Password)); err != nil {
-		http.Error(w, "Wrong password", http.StatusBadRequest)
-		return
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		return nil, err
 	}
 
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
@@ -98,89 +57,60 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 	tokenString, err := accessToken.SignedString([]byte(os.Getenv("JWT_SECRET_KEY")))
 	if err != nil {
-		http.Error(w, "Error creating token", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
-	response := struct {
-		Message string `json:"message"`
-		Token   string `json:"token"`
-	}{
+	return &pb.LoginResponse{
 		Message: "User has login successfully",
 		Token:   tokenString,
-	}
-	respondJSON(w, http.StatusOK, response)
+	}, nil
 }
 
-func ResetPassword(w http.ResponseWriter, r *http.Request) {
+func (s *server) ResetPassword(ctx context.Context, req *pb.ResetPasswordRequest) (*pb.ResetPasswordResponse, error) {
 	db := config.GetDBInstance()
 
-	vars := mux.Vars(r)
-	userIDstr := vars["id"]
-
-	var requestBody struct {
-		ResetToken              string `json:"reset_token"`
-		Email                   string `json:"email"`
-		NewPassword             string `json:"new_password"`
-		NewPasswordConfirmation string `json:"new_password_confirmation"`
-	}
-
-	err := json.NewDecoder(r.Body).Decode(&requestBody)
-	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	token, err := jwt.Parse(requestBody.ResetToken, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.Parse(req.ResetToken, func(token *jwt.Token) (interface{}, error) {
 		return []byte(os.Getenv("JWT_SECRET_KEY")), nil
 	})
 
 	if err != nil {
-		http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
-		return
+		return nil, err
 	}
 
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		if claims["email"] != requestBody.Email {
-			http.Error(w, "Invalid token for the provided email", http.StatusUnauthorized)
-			return
+		emailClaim, emailOk := claims["email"].(string)
+		if !emailOk {
+			return nil, errors.New("Invalid token: email claim not found or not a string")
 		}
 
-		if requestBody.NewPassword != requestBody.NewPasswordConfirmation {
-			http.Error(w, "Password and password confirmation do not match", http.StatusBadRequest)
-			return
-		}
-		hashedNewPwd, err := bcrypt.GenerateFromPassword([]byte(requestBody.NewPassword), 10)
-		if err != nil {
-			http.Error(w, "Error hashing password", http.StatusInternalServerError)
-			return
-		}
-
-		userID, err := strconv.Atoi(userIDstr)
-		if err != nil {
-			http.Error(w, "Invalid user id", http.StatusBadRequest)
-			return
-		}
-
+		// Fetch user from the database using the email from the claims
 		var user models.User
-		res := db.First(&user, userID)
-		if res.Error != nil {
-			http.Error(w, "User not found", http.StatusNotFound)
-			return
+		if err := db.Where("email = ?", emailClaim).First(&user).Error; err != nil {
+			return nil, err
+		}
+
+		if req.Email != emailClaim {
+			return nil, errors.New("Email in the request does not match the email in the token")
+		}
+
+		if req.NewPassword != req.NewPasswordConfirmation {
+			return nil, errors.New("Password and password confirmation do not match")
+		}
+
+		hashedNewPwd, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), 10)
+		if err != nil {
+			return nil, err
 		}
 
 		user.Password = string(hashedNewPwd)
 		if err := db.Save(&user).Error; err != nil {
-			http.Error(w, "Error updating new password", http.StatusInternalServerError)
-			return
+			return nil, err
 		}
 
-		response := struct {
-			Message string `json:"message"`
-		}{
+		return &pb.ResetPasswordResponse{
 			Message: "Password was reset successfully",
-		}
-		respondJSON(w, http.StatusOK, response)
+		}, nil
 	}
 
+	return nil, errors.New("Invalid or expired token")
 }

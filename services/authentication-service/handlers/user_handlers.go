@@ -1,136 +1,125 @@
 package handlers
 
 import (
-	"encoding/json"
+	"context"
 	"net/http"
-	"strconv"
 
-	"github.com/gorilla/mux"
 	"github.com/temuka-authentication-service/config"
 	"github.com/temuka-authentication-service/models"
+	"github.com/temuka-authentication-service/pb"
 )
 
-func SearchUsers(w http.ResponseWriter, r *http.Request) {
+func (s *server) SearchUsers(ctx context.Context, req *pb.SearchUsersRequest) (*pb.SearchUsersResponse, error) {
 	db := config.GetDBInstance()
 
 	var users []models.User
-
 	if err := db.Find(&users).Error; err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
 	if len(users) == 0 {
-		http.Error(w, "No user found", http.StatusNotFound)
-		return
+		return nil, httpError(http.StatusNotFound, "No user found")
 	}
 
-	response := struct {
-		Message string        `json:"message"`
-		Data    []models.User `json:"data"`
-	}{
-		Message: "User has been created",
-		Data:    users,
+	var pbUsers []*pb.User
+	for _, user := range users {
+		pbUsers = append(pbUsers, &pb.User{
+			Id:             int32(user.ID),
+			Username:       user.Username,
+			Email:          user.Email,
+			ProfilePicture: user.ProfilePicture,
+			Desc:           user.Desc,
+		})
 	}
-	respondJSON(w, http.StatusOK, response)
+
+	return &pb.SearchUsersResponse{
+		Message: "Users have been retrieved",
+		Data:    pbUsers,
+	}, nil
 }
 
-func GetUserDetail(w http.ResponseWriter, r *http.Request) {
+func (s *server) GetUserDetail(ctx context.Context, req *pb.UserDetailRequest) (*pb.UserDetailResponse, error) {
 	db := config.GetDBInstance()
 
-	vars := mux.Vars(r)
-	userIDstr := vars["id"]
-
-	userID, err := strconv.Atoi(userIDstr)
-	if err != nil {
-		http.Error(w, "Invalid user id", http.StatusBadRequest)
-		return
-	}
-
+	userID := req.Id
 	var user models.User
-	res := db.First(&user, userID)
-	if res.Error != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
-		return
+	if err := db.First(&user, userID).Error; err != nil {
+		return nil, httpError(http.StatusNotFound, "User not found")
 	}
 
-	db.Find(&user)
-	response := struct {
-		Message string      `json:"message"`
-		Data    models.User `json:"data"`
-	}{
-		Message: "User detail has been retrieved",
-		Data:    user,
-	}
-
-	respondJSON(w, http.StatusOK, response)
+	return &pb.UserDetailResponse{
+		Id:             int32(user.ID),
+		Username:       user.Username,
+		Email:          user.Email,
+		ProfilePicture: user.ProfilePicture,
+		Desc:           user.Desc,
+	}, nil
 }
 
-func CreateUser(w http.ResponseWriter, r *http.Request) {
+func (s *server) CreateUser(ctx context.Context, req *pb.CreateUserRequest) (*pb.CreateUserResponse, error) {
 	db := config.GetDBInstance()
-
-	var requestBody struct {
-		Username string `json:"username"`
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
-
-	err := json.NewDecoder(r.Body).Decode(&requestBody)
-	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
 
 	newUser := models.User{
-		Username: requestBody.Username,
-		Email:    requestBody.Email,
-		Password: requestBody.Password,
+		Username: req.Username,
+		Email:    req.Email,
+		Password: req.Password,
 	}
 
-	db.Create(&newUser)
-	response := struct {
-		Message string      `json:"message"`
-		Data    models.User `json:"data"`
-	}{
-		Message: "User has been created",
-		Data:    newUser,
+	if err := db.Create(&newUser).Error; err != nil {
+		return nil, err
 	}
-	respondJSON(w, http.StatusOK, response)
+
+	return &pb.CreateUserResponse{
+		Message: "User has been created",
+		Data: &pb.User{
+			Id:             int32(newUser.ID),
+			Username:       newUser.Username,
+			Email:          newUser.Email,
+			ProfilePicture: newUser.ProfilePicture,
+			Desc:           newUser.Desc,
+		},
+	}, nil
 }
 
-func UpdateUser(w http.ResponseWriter, r *http.Request) {
+func (s *server) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*pb.UpdateUserResponse, error) {
 	db := config.GetDBInstance()
 
-	vars := mux.Vars(r)
-	userIDstr := vars["user_id"]
-
-	userID, err := strconv.Atoi(userIDstr)
-	if err != nil {
-		http.Error(w, "Invalid user id", http.StatusBadRequest)
-		return
-	}
-
+	userID := req.Id
 	var user models.User
-	res := db.First(&user, userID)
-	if res.Error != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
-		return
+	if err := db.First(&user, userID).Error; err != nil {
+		return nil, httpError(http.StatusNotFound, "User not found")
 	}
 
-	err = json.NewDecoder(r.Body).Decode(&user)
-	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
+	user.Username = req.Username
+	user.Email = req.Email
+	user.ProfilePicture = req.ProfilePicture
+	user.Desc = req.Desc
+
+	if err := db.Save(&user).Error; err != nil {
+		return nil, err
 	}
 
-	db.Save(&user)
-	response := struct {
-		Message string      `json:"message"`
-		Data    models.User `json:"data"`
-	}{
+	return &pb.UpdateUserResponse{
 		Message: "User has been updated",
-		Data:    user,
-	}
+		Data: &pb.User{
+			Id:             int32(user.ID),
+			Username:       user.Username,
+			Email:          user.Email,
+			ProfilePicture: user.ProfilePicture,
+			Desc:           user.Desc,
+		},
+	}, nil
+}
 
-	respondJSON(w, http.StatusOK, response)
+func httpError(statusCode int, message string) error {
+	return &err{statusCode, message}
+}
+
+type err struct {
+	statusCode int
+	message    string
+}
+
+func (e *err) Error() string {
+	return e.message
 }

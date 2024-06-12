@@ -4,8 +4,12 @@ package authentication;
 
 option go_package = "github.com/ivanosky144/temuka-microservice-oriented-backend-services/services/authentication-service/pb";
 
-service AuthenticationService {
+service UserService {
     rpc GetUserDetail (UserDetailRequest) returns (UserDetailResponse);
+    rpc CreateUser (CreateUserRequest) returns (CreateUserResponse);
+    rpc SearchUsers (SearchUsersRequest) returns (SearchUsersResponse);
+    rpc DeleteUser (DeleteUserRequest) returns (DeleteUserResponse);
+    rpc UpdateUser (UpdateUserRequest) returns (UpdateUserResponse);
 }
 
 message UserDetailRequest {
@@ -18,6 +22,54 @@ message UserDetailResponse {
     string email = 3;
     string profile_picture = 4;
     string desc = 5;
-
 }
 
+message CreateUserRequest {
+    string username = 1;
+    string email = 2;
+    string password = 3;
+}
+
+message CreateUserResponse {
+    string message = 1;
+    User data = 2;
+}
+
+message User {
+    int32 id = 1;
+    string username = 2;
+    string email = 3;
+    string profile_picture = 4;
+    string desc = 5;
+}
+
+message SearchUsersRequest {
+    // Add any search parameters if needed
+}
+
+message SearchUsersResponse {
+    string message = 1;
+    repeated User data = 2;
+}
+
+message DeleteUserRequest {
+    int32 id = 1;
+}
+
+message DeleteUserResponse {
+    string message = 1;
+}
+
+message UpdateUserRequest {
+    int32 id = 1;
+    string username = 2;
+    string email = 3;
+    string profile_picture = 4;
+    string desc = 5;
+    // Add other fields to update
+}
+
+message UpdateUserResponse {
+    string message = 1;
+    User data = 2;
+}
