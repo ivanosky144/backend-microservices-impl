@@ -1,17 +1,19 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
+	"github.com/temuka-messaging-service/pb"
+	"github.com/temuka-messaging-service/ws"
+	"gorm.io/gorm"
 )
 
-func respondJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	jsonResponse, err := json.Marshal(data)
-	if err != nil {
-		http.Error(w, "Error formatting JSON response", http.StatusInternalServerError)
-		return
-	}
-	_, _ = w.Write(jsonResponse)
+type server struct {
+	pb.UnimplementedMessagingServiceServer
 }
+
+// NewServer creates a new gRPC server.
+func NewServer() *server {
+	return &server{}
+}
+
+var hub *ws.Hub
+var db *gorm.DB
