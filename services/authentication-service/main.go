@@ -29,7 +29,7 @@ func main() {
 	grpcServer := grpc.NewServer()
 
 	// Register gRPC service implementation
-	pb.RegisterAuthServiceServer(grpcServer, handlers.NewServer())
+	pb.RegisterAuthenticationServiceServer(grpcServer, handlers.NewServer())
 
 	// Start gRPC server
 	lis, err := net.Listen("tcp", ":50051")

@@ -5,7 +5,7 @@ import (
 )
 
 type server struct {
-	pb.UnimplementedAuthServiceServer
+	pb.UnimplementedAuthenticationServiceServer
 }
 
 // NewServer creates a new gRPC server.

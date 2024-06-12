@@ -83,7 +83,6 @@ func (s *server) ResetPassword(ctx context.Context, req *pb.ResetPasswordRequest
 			return nil, errors.New("Invalid token: email claim not found or not a string")
 		}
 
-		// Fetch user from the database using the email from the claims
 		var user models.User
 		if err := db.Where("email = ?", emailClaim).First(&user).Error; err != nil {
 			return nil, err
