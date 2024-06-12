@@ -56,11 +56,11 @@ func GetTimelinePosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// var currentUser models.User
-	// if err := db.First(&currentUser, "id = ?", userID).Error; err != nil {
-	// 	http.Error(w, "Cannot retrieve the data because the user was not found", http.StatusNotFound)
-	// 	return
-	// }
+	var currentUser models.User
+	if err := db.First(&currentUser, "id = ?", userID).Error; err != nil {
+		http.Error(w, "Cannot retrieve the data because the user was not found", http.StatusNotFound)
+		return
+	}
 
 	var userPosts []models.Post
 	if err := db.Where("user_id = ?", userID).Find(&userPosts).Error; err != nil {

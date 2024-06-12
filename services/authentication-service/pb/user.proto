@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package authentication;
+
+option go_package = "github.com/ivanosky144/temuka-microservice-oriented-backend-services/services/authentication-service/pb";
+
+service AuthenticationService {
+    rpc GetUserDetail (UserDetailRequest) returns (UserDetailResponse);
+}
+
+message UserDetailRequest {
+    int32 id = 1;
+}
+
+message UserDetailResponse {
+    int32 id = 1;
+    string username = 2;
+    string email = 3;
+    string profile_picture = 4;
+    string desc = 5;
+
+}
+
