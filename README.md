@@ -1,4 +1,4 @@
-This project is a microservices implementation of Temuka backend services written entirely by
+This project is a microservices implementation of backend services written entirely by
 Hizkia Joy Ivan
 
 
